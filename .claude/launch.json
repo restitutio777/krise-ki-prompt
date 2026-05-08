@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "krise-ki-prompt",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["-e", "const port=process.env.PORT||3001;require('http').createServer((req,res)=>{const fs=require('fs'),path=require('path'),url=req.url==='/'?'/prio-widget.html':req.url,fp=path.join('/Users/pr_air/Desktop/Sanity-Websites/krise-ki-prompt',url),ext=path.extname(fp),types={'.html':'text/html; charset=utf-8','.js':'application/javascript','.css':'text/css','.svg':'image/svg+xml','.json':'application/json'};fs.readFile(fp,(e,d)=>{if(e){res.writeHead(404);res.end('Not found')}else{res.writeHead(200,{'Content-Type':types[ext]||'text/plain; charset=utf-8'});res.end(d)}})}).listen(port,()=>console.log('Server running on port '+port))"],
+      "port": 3001,
+      "autoPort": true
+    }
+  ]
+}

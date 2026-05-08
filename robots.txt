@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://krise-ki-prompt.vercel.app/sitemap.xml

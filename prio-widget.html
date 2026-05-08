@@ -1,0 +1,605 @@
+<!--
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  Hormuz Briefing — Personalisierter Prio-Finder              ║
+  ║  Einbinden: diesen Block an beliebiger Stelle in der Seite   ║
+  ║  API-Proxy: /api/claude (Vercel Serverless Function)         ║
+  ╚══════════════════════════════════════════════════════════════╝
+-->
+<section id="prio-finder" style="margin: 4rem 0; scroll-margin-top: 80px;">
+
+<style>
+#prio-finder {
+  --pf-green: #1D9E75;
+  --pf-green-dark: #0F6E56;
+  --pf-green-light: #E1F5EE;
+  --pf-green-text: #085041;
+  --pf-red-bg: #FCEBEB;
+  --pf-red-text: #A32D2D;
+  --pf-amber-bg: #FAEEDA;
+  --pf-amber-text: #854F0B;
+  --pf-border: rgba(0,0,0,0.12);
+  --pf-radius: 10px;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.pf-wrap {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.pf-header {
+  margin-bottom: 2rem;
+  border-top: 2px solid var(--pf-green);
+  padding-top: 1.25rem;
+}
+
+.pf-header h2 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 0 0 .4rem;
+  color: inherit;
+}
+
+.pf-header p {
+  font-size: .9rem;
+  opacity: .65;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.pf-progress {
+  height: 3px;
+  background: var(--pf-border);
+  border-radius: 99px;
+  margin-bottom: 2rem;
+  overflow: hidden;
+}
+
+.pf-progress-fill {
+  height: 100%;
+  background: var(--pf-green);
+  border-radius: 99px;
+  transition: width .35s ease;
+  width: 0%;
+}
+
+.pf-step { display: none; }
+.pf-step.pf-active { display: block; }
+
+.pf-step-label {
+  font-size: .75rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  opacity: .45;
+  margin-bottom: .6rem;
+  font-weight: 500;
+}
+
+.pf-step h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 .35rem;
+}
+
+.pf-step .pf-sub {
+  font-size: .875rem;
+  opacity: .6;
+  margin: 0 0 1.25rem;
+  line-height: 1.5;
+}
+
+.pf-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.pf-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 1px solid var(--pf-border);
+  border-radius: var(--pf-radius);
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  user-select: none;
+  background: transparent;
+}
+
+.pf-opt:hover {
+  border-color: var(--pf-green);
+}
+
+.pf-opt.pf-selected {
+  border-color: var(--pf-green);
+  background: var(--pf-green-light);
+  color: var(--pf-green-text);
+}
+
+.pf-opt input {
+  accent-color: var(--pf-green);
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.pf-opt-label {
+  font-size: .9rem;
+  line-height: 1.4;
+}
+
+.pf-nav {
+  display: flex;
+  gap: 10px;
+}
+
+.pf-btn {
+  padding: 9px 20px;
+  border-radius: var(--pf-radius);
+  border: 1px solid var(--pf-border);
+  background: transparent;
+  cursor: pointer;
+  font-size: .875rem;
+  font-family: inherit;
+  transition: background .15s, opacity .15s;
+  color: inherit;
+}
+
+.pf-btn:hover { background: rgba(0,0,0,.05); }
+.pf-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+.pf-btn-primary {
+  background: var(--pf-green);
+  color: #fff;
+  border-color: var(--pf-green);
+  font-weight: 500;
+}
+
+.pf-btn-primary:hover { background: var(--pf-green-dark); border-color: var(--pf-green-dark); }
+
+/* Loading */
+.pf-loading {
+  display: none;
+  text-align: center;
+  padding: 3rem 0;
+}
+
+.pf-spinner {
+  width: 32px;
+  height: 32px;
+  border: 2.5px solid var(--pf-border);
+  border-top-color: var(--pf-green);
+  border-radius: 50%;
+  animation: pf-spin .75s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@keyframes pf-spin { to { transform: rotate(360deg); } }
+
+.pf-loading p {
+  font-size: .875rem;
+  opacity: .55;
+}
+
+/* Results */
+.pf-results { display: none; }
+
+.pf-results-intro {
+  font-size: .875rem;
+  opacity: .55;
+  margin-bottom: 1.25rem;
+  line-height: 1.5;
+}
+
+.pf-card {
+  border: 1px solid var(--pf-border);
+  border-radius: var(--pf-radius);
+  padding: 1rem 1.125rem;
+  margin-bottom: .75rem;
+  transition: border-color .15s;
+}
+
+.pf-card:hover { border-color: rgba(0,0,0,.22); }
+
+.pf-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: .5rem;
+}
+
+.pf-badge {
+  font-size: .7rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 99px;
+  flex-shrink: 0;
+}
+
+.pf-badge-sofort { background: var(--pf-red-bg); color: var(--pf-red-text); }
+.pf-badge-woche  { background: var(--pf-amber-bg); color: var(--pf-amber-text); }
+.pf-badge-monat  { background: var(--pf-green-light); color: var(--pf-green-text); }
+
+.pf-card-title {
+  font-size: .95rem;
+  font-weight: 600;
+}
+
+.pf-card-body {
+  font-size: .875rem;
+  opacity: .7;
+  line-height: 1.65;
+}
+
+.pf-restart {
+  background: none;
+  border: none;
+  font-size: .8rem;
+  opacity: .45;
+  cursor: pointer;
+  text-decoration: underline;
+  margin-top: 1.5rem;
+  font-family: inherit;
+  color: inherit;
+  padding: 0;
+  display: block;
+}
+
+.pf-restart:hover { opacity: .7; }
+
+.pf-export {
+  display: flex;
+  gap: 8px;
+  margin-top: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.pf-export-btn {
+  background: var(--pf-green-light);
+  color: var(--pf-green-text);
+  border: 1px solid rgba(29,158,117,0.3);
+  border-radius: var(--pf-radius);
+  padding: 9px 16px;
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s, color .15s;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.pf-export-btn:hover {
+  background: var(--pf-green);
+  color: #fff;
+}
+
+@media print {
+  #prio-finder .pf-step,
+  #prio-finder .pf-progress,
+  #prio-finder .pf-export,
+  #prio-finder .pf-restart,
+  #prio-finder .pf-error,
+  #prio-finder .pf-header { display: none !important; }
+  #prio-finder .pf-results { display: block !important; }
+  #prio-finder .pf-card { break-inside: avoid; }
+}
+
+.pf-error {
+  display: none;
+  background: var(--pf-red-bg);
+  border: 1px solid #F09595;
+  border-radius: var(--pf-radius);
+  padding: 12px 14px;
+  font-size: .875rem;
+  color: var(--pf-red-text);
+  margin-top: 1rem;
+}
+</style>
+
+<div class="pf-wrap">
+  <div class="pf-header">
+    <h2>Hormuz-Krise: Was zählt für Ihren Haushalt?</h2>
+    <p>Sie müssen nicht jede Nachricht verfolgen. 5 kurze Fragen → dieser Check filtert aus hunderten Quellen (IEA, EZB, Bloomberg + unabhängige Analysten) die Handlungsempfehlungen, die für Ihre Situation zählen. Stand&nbsp;8.&nbsp;Mai&nbsp;2026. Keine Daten werden gespeichert.</p>
+  </div>
+
+  <div class="pf-progress"><div class="pf-progress-fill" id="pf-prog"></div></div>
+
+  <!-- Schritt 0: Intro -->
+  <div class="pf-step pf-active" id="pf-s0">
+    <h3>Was kommt auf Sie persönlich zu?</h3>
+    <p class="pf-sub">Dieser Check berücksichtigt Zusammenhänge, an die Sie allein nicht denken — von AdBlue-Engpässen bis zu Medikamenten-Lieferketten, von Kerosinmangel bis zu Ihrem Gasvertrag. Egal ob Pendler, Mieter mit Gasheizung oder Selbstständige.</p>
+    <div class="pf-nav">
+      <button class="pf-btn pf-btn-primary" onclick="pfGoTo(1)">Jetzt starten →</button>
+    </div>
+  </div>
+
+  <!-- Schritt 1: Heizung -->
+  <div class="pf-step" id="pf-s1">
+    <div class="pf-step-label">Frage 1 von 5</div>
+    <h3>Wie heizen Sie?</h3>
+    <p class="pf-sub">Hauptenergieträger Ihrer Wohnung oder Ihres Hauses.</p>
+    <div class="pf-options" id="pf-q1">
+      <label class="pf-opt"><input type="radio" name="pfq1" value="Heizöl"><span class="pf-opt-label">Heizöl</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq1" value="Erdgas"><span class="pf-opt-label">Erdgas (Anschluss)</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq1" value="Fernwärme"><span class="pf-opt-label">Fernwärme</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq1" value="Wärmepumpe / Strom"><span class="pf-opt-label">Wärmepumpe / Strom</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq1" value="Holz / Pellets"><span class="pf-opt-label">Holz / Pellets</span></label>
+    </div>
+    <div class="pf-nav">
+      <button class="pf-btn" onclick="pfGoTo(0)">Zurück</button>
+      <button class="pf-btn pf-btn-primary" id="pf-n1" onclick="pfGoTo(2)" disabled>Weiter →</button>
+    </div>
+  </div>
+
+  <!-- Schritt 2: Fahrzeug -->
+  <div class="pf-step" id="pf-s2">
+    <div class="pf-step-label">Frage 2 von 5</div>
+    <h3>Welches Fahrzeug nutzen Sie?</h3>
+    <p class="pf-sub">Mehrfachauswahl möglich.</p>
+    <div class="pf-options" id="pf-q2">
+      <label class="pf-opt"><input type="checkbox" name="pfq2" value="Diesel mit AdBlue (ab 2014)"><span class="pf-opt-label">Diesel mit AdBlue (Baujahr ab 2014)</span></label>
+      <label class="pf-opt"><input type="checkbox" name="pfq2" value="Diesel ohne AdBlue"><span class="pf-opt-label">Diesel ohne AdBlue (älter)</span></label>
+      <label class="pf-opt"><input type="checkbox" name="pfq2" value="Benziner"><span class="pf-opt-label">Benziner</span></label>
+      <label class="pf-opt"><input type="checkbox" name="pfq2" value="Elektroauto"><span class="pf-opt-label">Elektroauto</span></label>
+      <label class="pf-opt"><input type="checkbox" name="pfq2" value="Kein eigenes Auto"><span class="pf-opt-label">Kein eigenes Auto / ÖPNV</span></label>
+    </div>
+    <div class="pf-nav">
+      <button class="pf-btn" onclick="pfGoTo(1)">Zurück</button>
+      <button class="pf-btn pf-btn-primary" id="pf-n2" onclick="pfGoTo(3)" disabled>Weiter →</button>
+    </div>
+  </div>
+
+  <!-- Schritt 3: Medikamente -->
+  <div class="pf-step" id="pf-s3">
+    <div class="pf-step-label">Frage 3 von 5</div>
+    <h3>Nehmen Sie regelmäßig Medikamente?</h3>
+    <p class="pf-sub">Bestimmte Wirkstoffe sind von Lieferengpässen besonders betroffen.</p>
+    <div class="pf-options" id="pf-q3">
+      <label class="pf-opt"><input type="radio" name="pfq3" value="Nein"><span class="pf-opt-label">Nein</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq3" value="Antibiotika oder Sulfonamide"><span class="pf-opt-label">Antibiotika oder Sulfonamide</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq3" value="Insulin (Diabetiker)"><span class="pf-opt-label">Insulin (Diabetiker)</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq3" value="Schilddrüsenmedikamente (z.B. Levothyroxin)"><span class="pf-opt-label">Schilddrüsenmedikamente (z.B. Levothyroxin)</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq3" value="Andere Dauermedikation"><span class="pf-opt-label">Andere Dauermedikation</span></label>
+    </div>
+    <div class="pf-nav">
+      <button class="pf-btn" onclick="pfGoTo(2)">Zurück</button>
+      <button class="pf-btn pf-btn-primary" id="pf-n3" onclick="pfGoTo(4)" disabled>Weiter →</button>
+    </div>
+  </div>
+
+  <!-- Schritt 4: Haushalt -->
+  <div class="pf-step" id="pf-s4">
+    <div class="pf-step-label">Frage 4 von 5</div>
+    <h3>Wie ist Ihr Haushalt zusammengesetzt?</h3>
+    <div class="pf-options" id="pf-q4">
+      <label class="pf-opt"><input type="radio" name="pfq4" value="Singlehaushalt"><span class="pf-opt-label">Singlehaushalt</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq4" value="Paar ohne Kinder"><span class="pf-opt-label">Paar ohne Kinder</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq4" value="Familie mit Kindern"><span class="pf-opt-label">Familie mit Kindern</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq4" value="Rentnerhaushalt"><span class="pf-opt-label">Rentnerhaushalt / Senior</span></label>
+    </div>
+    <div class="pf-nav">
+      <button class="pf-btn" onclick="pfGoTo(3)">Zurück</button>
+      <button class="pf-btn pf-btn-primary" id="pf-n4" onclick="pfGoTo(5)" disabled>Weiter →</button>
+    </div>
+  </div>
+
+  <!-- Schritt 5: Beruf -->
+  <div class="pf-step" id="pf-s5">
+    <div class="pf-step-label">Frage 5 von 5</div>
+    <h3>In welchem Bereich arbeiten Sie?</h3>
+    <div class="pf-options" id="pf-q5">
+      <label class="pf-opt"><input type="radio" name="pfq5" value="Homeoffice / Büro"><span class="pf-opt-label">Homeoffice / Büro</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq5" value="Pendler (tägliche Fahrt notwendig)"><span class="pf-opt-label">Pendler (tägliche Fahrt notwendig)</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq5" value="Logistik / Transport / LKW"><span class="pf-opt-label">Logistik / Transport / LKW</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq5" value="Landwirtschaft"><span class="pf-opt-label">Landwirtschaft</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq5" value="Gesundheit / Pflege"><span class="pf-opt-label">Gesundheit / Pflege</span></label>
+      <label class="pf-opt"><input type="radio" name="pfq5" value="Nicht erwerbstätig / Rente"><span class="pf-opt-label">Nicht erwerbstätig / Rente</span></label>
+    </div>
+    <div class="pf-nav">
+      <button class="pf-btn" onclick="pfGoTo(4)">Zurück</button>
+      <button class="pf-btn pf-btn-primary" id="pf-n5" onclick="pfGenerate()" disabled>Prioritäten erstellen →</button>
+    </div>
+  </div>
+
+  <!-- Laden -->
+  <div class="pf-loading" id="pf-loading">
+    <div class="pf-spinner"></div>
+    <p>Ihre Situation wird analysiert…</p>
+  </div>
+
+  <!-- Ergebnisse -->
+  <div class="pf-results" id="pf-results">
+    <p class="pf-results-intro" id="pf-results-intro"></p>
+    <div id="pf-prio-list"></div>
+    <div class="pf-export" id="pf-export">
+      <button class="pf-export-btn" onclick="pfCopy(this)">Ergebnis kopieren</button>
+      <button class="pf-export-btn" onclick="window.print()">Als PDF speichern</button>
+      <a class="pf-export-btn" id="pf-mail-link" href="#">Per E-Mail senden</a>
+    </div>
+    <button class="pf-restart" onclick="pfRestart()">↩ Neu starten</button>
+  </div>
+
+  <div class="pf-error" id="pf-error">
+    Fehler bei der Analyse.
+    <button class="pf-btn" style="margin-left: 10px; font-size: .8rem; padding: 5px 14px; border-color: var(--pf-red-text); color: var(--pf-red-text);" onclick="pfGenerate()">Erneut versuchen</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const pfA = {};
+
+  function pfGoTo(step) {
+    document.querySelectorAll('.pf-step').forEach(s => s.classList.remove('pf-active'));
+    const el = document.getElementById('pf-s' + step);
+    if (el) el.classList.add('pf-active');
+    const pct = step === 0 ? 0 : Math.round((step / 5) * 100);
+    document.getElementById('pf-prog').style.width = pct + '%';
+    document.getElementById('pf-error').style.display = 'none';
+    document.getElementById('pf-s' + step).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  window.pfGoTo = pfGoTo;
+
+  function pfSetup(name, nextId, multi) {
+    document.querySelectorAll(`input[name="${name}"]`).forEach(inp => {
+      inp.addEventListener('change', () => {
+        if (multi) {
+          const vals = [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(i => i.value);
+          pfA[name] = vals.join(', ');
+          inp.closest('.pf-opt').classList.toggle('pf-selected', inp.checked);
+          document.getElementById(nextId).disabled = vals.length === 0;
+        } else {
+          pfA[name] = inp.value;
+          document.querySelectorAll(`input[name="${name}"]`).forEach(i => {
+            i.closest('.pf-opt').classList.toggle('pf-selected', i.checked);
+          });
+          document.getElementById(nextId).disabled = false;
+        }
+      });
+    });
+  }
+
+  pfSetup('pfq1', 'pf-n1', false);
+  pfSetup('pfq2', 'pf-n2', true);
+  pfSetup('pfq3', 'pf-n3', false);
+  pfSetup('pfq4', 'pf-n4', false);
+  pfSetup('pfq5', 'pf-n5', false);
+
+  async function pfGenerate() {
+    document.querySelectorAll('.pf-step').forEach(s => s.classList.remove('pf-active'));
+    document.getElementById('pf-loading').style.display = 'block';
+    document.getElementById('pf-results').style.display = 'none';
+    document.getElementById('pf-prog').style.width = '100%';
+
+    const prompt = `Du bist ein persönlicher Krisenberater. Der Nutzer gibt dir ein Lagebriefing und sein Profil. Deine Aufgabe: analysieren, priorisieren, konkrete Maßnahmen vorschlagen. Arbeite mit dem Briefing als Faktenbasis — keine Disclaimer, keine Relativierungen. Der Nutzer will Analyse und Handlung, keine rhetorische Vorsicht.
+
+Lagebriefing (Stand 8. Mai 2026): Seit 28. Februar Krieg USA+Israel gegen Iran und seine Verbündeten (Hisbollah, Huthis, irakische PMF-Milizen). US-israelische Operation „Epic Fury" startete den Krieg mit Schlägen auf iranische Militär-, Nuklear- und Regierungsziele. Oberster Führer Ali Khamenei wurde getötet; sein Sohn Mojtaba Khamenei folgte ihm nach. Iran hat trotz hunderter Raketen/Drohnen auf Israel, US-Basen und Golfstaaten den Großteil seines konventionellen Arsenals, seiner Luftverteidigung und Nuklearkapazitäten verloren. WAFFENRUHE seit 8. April fragil, mehrfach verlängert — diese Woche schwer angeschlagen: in der Nacht 7./8. Mai 110 Minuten Seegefecht in Hormus, 3 US-Zerstörer unter iranischem Beschuss, US-Vergeltungsschläge auf iranische Militäranlagen (Bandar Abbas, Insel Qeshm). Trump nennt das „Bagatelle" auf Truth Social, droht „violente" Vergeltung falls Iran nicht „rasch" unterzeichnet. Iran (Sprecher Baghaï): „flagrante Verletzung". VERHANDLUNGEN über Pakistan vermittelt. US-Forderungen: vollständige Demontage iranischer Nuklearzentren, 20-jähriges Enrichment-Verbot, Hormus-Öffnung, keine Atomwaffe. Iran-Forderungen: Enrichment-Recht, Souveränität über die Meerenge. Trump: Deal „in Tagen möglich". Phase „Vor-Verhandlungen" — weder gewonnen noch gebrochen. Konfliktbilanz: tausende Tote (Iran, Libanon, Israel, Golfstaaten), Millionen Vertriebene. HORMUS seit ~10 Wochen blockiert (üblich: 20–25 % des Welt-Öl/LNG-Handels). Iran hat eigene Behörde mit Mautgebühren und Durchfahrtsgenehmigungen aufgebaut (Lloyd's List); Rubio: „inakzeptabel". Frankreich führt internationale Marinekoalition; Flugzeugträger Charles de Gaulle Richtung südliches Rotes Meer. US-Seeblockade hält: am 8. Mai allein 70+ Tanker gestoppt (166 Mio Barrel, ~13 Mrd $). US-Kampfflugzeug neutralisierte 2 iranische Tanker. Iran kapert „Ocean Koi" (Barbados-Flagge). VAE: iranische Raketen/Drohnen-Wellen, 3 Verletzte. Ölpest ~45 km² vor Insel Kharg (Copernicus 6.–8.5.). MINEN: chaotisch verlegt, Iran weiß selbst nicht wo (NYT); Stock 5.000–6.000, 5 % reichen für monatelange Sperre; Referenz 1991: 2 Jahre für 1.300 Minen. Italien bietet Marine; Deutschland wartet auf UN-Mandat + Bundestag. „Odessa" (Malta-Flagge, 1 Mio Barrel) erreichte Südkorea am 8.5. (Transit 17.4.) — erster nennenswerter seit Blockade. LIBANON: israelische Schläge intensiv, gestern 12 Tote in Süden, 152 Angriffe auf Gesundheitseinrichtungen seit 2.3. (103 Tote, 241 Verletzte/WHO); 3 Mio+ Libanesen humanitär abhängig. Liban-Israel-Gespräche 14./15.5. Washington. PETROLEUM: Brent ~100 $/Barrel (Freitagmorgen 101,71 $, +1,65 %), Spitze 103 $; vor Krieg 70 $; WTI 96 $. US-DOJ ermittelt 2,6 Mrd $ Insider-Wetten auf fallende Ölpreise vor Trump-Ankündigungen (ABC, NBC). DIESEL: 30–40 % EU-Diesel aus Naher Osten; Preise dank Waffenruhe stabil, bei Bruch explosiv. GAS: EU-LNG-Importe aus Russland Q1 +17,2 % YoY (Yamal); Mix USA 60 %, RU 17 %, NG/Q 6 %; Hormus normalerweise 20 % Welt-LNG; Ras Laffan (Katar) 3–5 Jahre Reparatur. KEROSIN: EASA-Notfallzulassung für US-Jet-A wegen Engpass. Frankreich (Min. Tabarot): „keine massiven Annullierungen Sommer", Volotea 1 %, Transavia 2 %, Air France hält Plan. Kerosin +50 % seit Kriegsbeginn; IAG (BA-Mutter) Treibstoffkosten 2026: 9 Mrd € (+2 Mrd vs 2025); Brüssel zwingt Airlines zu Entschädigungen (250–600 € + Hotel + Erstattung). LEBENSMITTEL: FAO-Index April +1,6 % MoM, +2 % YoY (3. Monat Anstieg in Folge); Pflanzenöle +5,9 % MoM; Fleisch neuer April-Rekord (Rind); Getreide bislang verhalten. 1/3 Welt-Dünger durch Hormus; Düngemittelwerke Indien/Bangladesch/Pakistan schließen. Transmission Dünger→Weizen→Mehl→Brot: 4–6 Monate; voller Ernährungsschock im Herbst. FAO: über 3 Monate Blockade → weltweite Ernährungskrise wahrscheinlich; bei 10 Wochen jetzt. HEIZUNG: Pellets, Holz, Heizöl 6–8 Wochen Lieferzeit April–August, Preise monatlich steigend. Wer nach Juli bestellt, hat keinen Puffer. DEUTSCHLAND: laut Reuters/Wirtschaftswoche 12+ iranisch gesteuerte Anschlagspläne seit Kriegsbeginn vereitelt; Iraner seit 70 Tagen ohne globales Internet; DE-Exporte März +0,5 %. INFLATION: 5,5 % (sofortiger Stopp) bis 12,5 % (Krise hält an). Ray Dalio: „Weltkrieg"-Dynamik, „Krieg des Kapitals". STILLES MUSTER: Covid 2020, Energie Winter 2022 — offizielles Dementi bis zum letzten Moment, dann 48-Stunden-Umstellung. Heutige Empfehlungen können morgen Vorgaben werden. Wer früh handelt, wählt — wer auf die offizielle Ansage wartet, erleidet. BARGELD: bei Bankenstress oder Börsen-Crash können Abhebungslimits über Nacht eingeführt werden (Präzedenz Griechenland 2015); eine Woche Bargeld zu Hause sinnvoll. Medikamente, AdBlue, Helium knapp.
+
+Nutzerprofil:
+- Heizung: ${pfA.pfq1 || 'unbekannt'}
+- Fahrzeug: ${pfA.pfq2 || 'unbekannt'}
+- Medikamente: ${pfA.pfq3 || 'unbekannt'}
+- Haushalt: ${pfA.pfq4 || 'unbekannt'}
+- Beruf: ${pfA.pfq5 || 'unbekannt'}
+
+Erstelle genau 5 personalisierte Handlungsprioritäten. Antworte NUR als JSON-Array ohne Markdown-Backticks.
+
+Format:
+[
+  {"rang":1,"dringlichkeit":"sofort","titel":"...","massnahme":"..."},
+  {"rang":2,"dringlichkeit":"diese Woche","titel":"...","massnahme":"..."}
+]
+
+Regeln:
+- dringlichkeit: nur "sofort", "diese Woche" oder "diesen Monat"
+- massnahme: 2–3 konkrete Sätze, Sie-Form, keine Allgemeinplätze
+- Strikt auf das Profil zuschneiden: AdBlue nur bei Diesel ab 2014, Insulin nur bei Diabetiker, etc.`;
+
+    try {
+      const res = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1000,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+
+      const data = await res.json();
+      const raw = (data.content || []).map(b => b.text || '').join('').trim();
+      const prios = JSON.parse(raw.replace(/```json|```/g, '').trim());
+      pfRender(prios);
+    } catch (e) {
+      document.getElementById('pf-loading').style.display = 'none';
+      document.getElementById('pf-error').style.display = 'block';
+      document.getElementById('pf-error').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+  window.pfGenerate = pfGenerate;
+
+  function pfBadgeClass(d) {
+    if (d === 'sofort') return 'pf-badge-sofort';
+    if (d === 'diese Woche') return 'pf-badge-woche';
+    return 'pf-badge-monat';
+  }
+
+  function pfEsc(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  function pfRender(prios) {
+    document.getElementById('pf-loading').style.display = 'none';
+    document.getElementById('pf-results-intro').textContent =
+      `Basierend auf Ihrem Profil: ${pfA.pfq4 || ''}, ${pfA.pfq1 || ''}, ${pfA.pfq2 || ''}.`;
+
+    const list = document.getElementById('pf-prio-list');
+    list.innerHTML = '';
+    prios.forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'pf-card';
+      card.innerHTML = `
+        <div class="pf-card-header">
+          <span class="pf-badge ${pfBadgeClass(p.dringlichkeit)}">${pfEsc(p.dringlichkeit)}</span>
+          <span class="pf-card-title">${pfEsc(p.titel)}</span>
+        </div>
+        <div class="pf-card-body">${pfEsc(p.massnahme)}</div>`;
+      list.appendChild(card);
+    });
+    document.getElementById('pf-results').style.display = 'block';
+    document.getElementById('pf-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Build mailto link
+    let mailBody = 'Hormuz-Krise: Meine Prioritaeten\n';
+    mailBody += document.getElementById('pf-results-intro').textContent + '\n\n';
+    prios.forEach((p, i) => {
+      mailBody += (i+1) + '. [' + p.dringlichkeit + '] ' + p.titel + '\n   ' + p.massnahme + '\n\n';
+    });
+    document.getElementById('pf-mail-link').href =
+      'mailto:?subject=' + encodeURIComponent('Hormuz-Krise: Meine Prioritäten') +
+      '&body=' + encodeURIComponent(mailBody);
+  }
+
+  function pfCopy(btn) {
+    const cards = document.querySelectorAll('#pf-prio-list .pf-card');
+    let text = 'Hormuz-Krise: Meine Prioritäten\n';
+    text += document.getElementById('pf-results-intro').textContent + '\n\n';
+    cards.forEach((card, i) => {
+      const badge = card.querySelector('.pf-badge').textContent;
+      const title = card.querySelector('.pf-card-title').textContent;
+      const body = card.querySelector('.pf-card-body').textContent;
+      text += (i+1) + '. [' + badge + '] ' + title + '\n   ' + body + '\n\n';
+    });
+    navigator.clipboard.writeText(text).then(function() {
+      var orig = btn.textContent;
+      btn.textContent = 'Kopiert!';
+      setTimeout(function() { btn.textContent = orig; }, 2000);
+    });
+  }
+  window.pfCopy = pfCopy;
+
+  function pfRestart() {
+    Object.keys(pfA).forEach(k => delete pfA[k]);
+    document.querySelectorAll('.pf-opt').forEach(o => o.classList.remove('pf-selected'));
+    document.querySelectorAll('#prio-finder input').forEach(i => i.checked = false);
+    ['pf-n1','pf-n2','pf-n3','pf-n4','pf-n5'].forEach(id => {
+      document.getElementById(id).disabled = true;
+    });
+    document.getElementById('pf-results').style.display = 'none';
+    document.getElementById('pf-error').style.display = 'none';
+    pfGoTo(0);
+  }
+  window.pfRestart = pfRestart;
+})();
+</script>
+
+</section>
